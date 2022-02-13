@@ -1,0 +1,81 @@
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Description: The name of the service, job, or workflow being deployed.
+  DiscoveryServiceArn:
+    Type: String
+    Description: The arn of aws cloudmap.
+
+Resources:
+  ApiGatewayV2Api:
+    Type: "AWS::ApiGatewayV2::Api"
+    Properties:
+      Name: "sample-api"
+      ApiKeySelectionExpression: "$request.header.x-api-key"
+      ProtocolType: "HTTP"
+      RouteSelectionExpression: "$request.method $request.path"
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - "*"
+        AllowMethods:
+          - "*"
+        AllowOrigins:
+          - "*"
+        ExposeHeaders:
+          - "*"
+        MaxAge: 0
+      DisableExecuteApiEndpoint: false
+
+  ApiGatewayV2Stage:
+    Type: "AWS::ApiGatewayV2::Stage"
+    Properties:
+      StageName: "$default"
+      ApiId: !Ref ApiGatewayV2Api
+      AutoDeploy: true
+
+  MyVpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub "${App}-${Env}-${Name}"
+      # Get exported ids from the parent stack that creates the VPC
+      SubnetIds:
+        !Split [",", Fn::ImportValue: !Sub "${App}-${Env}-PrivateSubnets"]
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub "${App}-${Env}-EnvironmentSecurityGroup"
+
+  ApiGatewayV2Integration:
+    Type: "AWS::ApiGatewayV2::Integration"
+    Properties:
+      ApiId: !Ref ApiGatewayV2Api
+      ConnectionId: !Ref MyVpcLink
+      ConnectionType: "VPC_LINK"
+      IntegrationMethod: "ANY"
+      IntegrationType: "HTTP_PROXY"
+      IntegrationUri: !Ref DiscoveryServiceArn
+      TimeoutInMillis: 30000
+      PayloadFormatVersion: "1.0"
+      RequestParameters:
+        "overwrite:path": "/create"
+
+  ApiGatewayV2Route:
+    Type: "AWS::ApiGatewayV2::Route"
+    Properties:
+      ApiId: !Ref ApiGatewayV2Api
+      AuthorizationType: "AWS_IAM"
+      # allow to all endpoints behind it
+      RouteKey: "POST /create"
+      Target: !Sub "integrations/${ApiGatewayV2Integration}"
+
+Outputs:
+  SampleApiId:
+    Description: apiId 
+    Value: !Ref ApiGatewayV2Api
+    Export:
+      Name: !Sub "export-${App}-${Env}-api-id" 
