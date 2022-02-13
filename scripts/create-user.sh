@@ -1,5 +1,5 @@
 set -eu
-readonly BASE_DIR=$(dirname $(greadlink -f $0))
+readonly BASE_DIR=$(dirname $(readlink -f $0))
 readonly AWS_PROFILE=$1
 readonly PASSWORD="$(LC_CTYPE=C tr -dc A-Za-z0-9_\!\@\#\$\%\^\&\*\(\)-+= < /dev/urandom | head -c 32)"
 
